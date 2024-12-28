@@ -87,10 +87,9 @@ class ExpenseSplitterApp(QMainWindow):
                 group_name = group[1]
                 item = f"{group_name} (Double-click to manage)"
                 list_item = QListWidgetItem(item)
-                list_item.setData(0, group_name)  # Store group name in the item data
+                list_item.setData(0, group_name)
                 self.group_list_widget.addItem(list_item)
 
-            # Connect the item double-clicked signal to the function to open group management
             self.group_list_widget.itemDoubleClicked.connect(self.open_group_management_window)
 
         except Exception as e:
@@ -98,7 +97,7 @@ class ExpenseSplitterApp(QMainWindow):
 
     def open_group_management_window(self, item):
         """Open a new window to manage participants for the selected group."""
-        group_name = item.data(0)  # Get the group name from the item data
+        group_name = item.data(0)
         group_window = GroupManagementWindow(group_name)
         group_window.exec_()
 
@@ -136,7 +135,7 @@ class GroupManagementWindow(QDialog):
         self.group_name = group_name
         self.group_manager = GroupManager()
         self.bill_manager = BillManager()
-        self.participant_manager = ParticipantManager()  # Reference to ParticipantManager
+        self.participant_manager = ParticipantManager()
 
         self.layout = QVBoxLayout()
 
@@ -144,8 +143,6 @@ class GroupManagementWindow(QDialog):
         self.setup_participant_section()
 
         self.setLayout(self.layout)
-
-        # Update the participants list and check if Add Bill button should be enabled
         self.update_participant_list()
 
     def setup_participant_section(self):
@@ -214,7 +211,6 @@ class GroupManagementWindow(QDialog):
     def update_participant_list(self):
         """Update the list of participants for the group."""
         try:
-            # Manually fetch participants from the database via ParticipantManager
             participants = self.participant_manager.db.fetch_all("""
                 SELECT first_name, last_name 
                 FROM participants 
@@ -226,7 +222,6 @@ class GroupManagementWindow(QDialog):
                 participant_name = f"{participant[0]} {participant[1]}"
                 self.participant_list_widget.addItem(participant_name)
 
-            # Check if there are participants in the group and enable the Add Bill button
             if participants:
                 self.add_bill_button.setEnabled(True)
 
@@ -315,7 +310,6 @@ class BillManagementWindow(QDialog):
         self.bills_table = QTableWidget()
         self.bills_table.setColumnCount(5)
         self.bills_table.setHorizontalHeaderLabels(["Title", "Amount", "Date", "Split Method", "Group"])
-        #self.bills_table.setSelectionBehavior(QTableWidget.SelectRows)
         table_layout.addWidget(self.bills_table)
 
         delete_bill_btn = QPushButton("Delete")
@@ -335,10 +329,8 @@ class BillManagementWindow(QDialog):
             return
 
         try:
-            # Ensure the amount is valid (convert to float)
             amount = float(amount)
 
-            # Add the bill to the group using the BillManager
             self.bill_manager.add_bill(self.group_name, title, amount, date, split_method)
 
             QMessageBox.information(self, "Success", f"Bill '{title}' added.")
@@ -371,7 +363,6 @@ class BillManagementWindow(QDialog):
                 for col, value in enumerate(bill[:-1]):
                     self.bills_table.setItem(row, col, QTableWidgetItem(str(value)))
 
-                # Add Delete button in the last column
                 delete_button = QPushButton("Delete")
                 delete_button.clicked.connect(lambda checked, bill_id=bill[-1]: self.remove_bill(title()))
                 self.bills_table.setCellWidget(row, 5, delete_button)
