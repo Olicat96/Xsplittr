@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QListWidget, QWidget,
-    QMessageBox, QDialog, QTableWidget, QTableWidgetItem, QListWidgetItem
+    QMessageBox, QDialog, QTableWidget, QTableWidgetItem, QListWidgetItem, QComboBox
 )
 from group import GroupManager
 from bill import BillManager
@@ -79,7 +79,6 @@ class ExpenseSplitterApp(QMainWindow):
             QMessageBox.critical(self, "Error", str(e))
 
     def update_group_list(self):
-        """Update the list of groups in the main window."""
         try:
             groups = self.group_manager.list_groups()
             self.group_list_widget.clear()
@@ -297,26 +296,39 @@ class BillManagementWindow(QDialog):
         self.bill_date_input = QLineEdit()
         self.bill_date_input.setPlaceholderText("Date (YYYY-MM-DD)")
 
+        self.split_method_dropdown = QComboBox()
+        self.split_method_dropdown.addItems(BillManager.SPLIT_METHODS)
+
         add_bill_btn = QPushButton("Add Bill")
         add_bill_btn.clicked.connect(self.add_bill)
 
         bill_input_layout.addWidget(self.bill_title_input)
         bill_input_layout.addWidget(self.bill_amount_input)
         bill_input_layout.addWidget(self.bill_date_input)
+        bill_input_layout.addWidget(self.split_method_dropdown)
         bill_input_layout.addWidget(add_bill_btn)
 
         self.layout.addLayout(bill_input_layout)
 
         # Bills Table Section
+        table_layout = QVBoxLayout()
         self.bills_table = QTableWidget()
-        self.bills_table.setColumnCount(5)  # Adjusted for Delete column
-        self.bills_table.setHorizontalHeaderLabels(["Title", "Amount", "Date", "Group", "Action"])
-        self.layout.addWidget(self.bills_table)
+        self.bills_table.setColumnCount(5)
+        self.bills_table.setHorizontalHeaderLabels(["Title", "Amount", "Date", "Split Method", "Group"])
+        #self.bills_table.setSelectionBehavior(QTableWidget.SelectRows)
+        table_layout.addWidget(self.bills_table)
+
+        delete_bill_btn = QPushButton("Delete")
+        delete_bill_btn.clicked.connect(self.remove_bill)
+        table_layout.addWidget(delete_bill_btn)
+
+        self.layout.addLayout(table_layout)
 
     def add_bill(self):
         title = self.bill_title_input.text()
         amount = self.bill_amount_input.text()
         date = self.bill_date_input.text()
+        split_method = self.split_method_dropdown.currentText()
 
         if not title or not amount or not date:
             QMessageBox.warning(self, "Error", "All fields are required.")
@@ -327,7 +339,7 @@ class BillManagementWindow(QDialog):
             amount = float(amount)
 
             # Add the bill to the group using the BillManager
-            self.bill_manager.add_bill(self.group_name, title, amount, date)
+            self.bill_manager.add_bill(self.group_name, title, amount, date, split_method)
 
             QMessageBox.information(self, "Success", f"Bill '{title}' added.")
 
@@ -346,9 +358,8 @@ class BillManagementWindow(QDialog):
 
     def update_bill_table(self):
         try:
-            # Fetch the bills associated with this group
             bills = self.bill_manager.db.fetch_all("""
-                SELECT b.title, b.amount, b.date, g.name AS group_name, b.id
+                SELECT b.title, b.amount, b.date, b.split_method, g.name AS group_name, b.id
                 FROM bills b
                 JOIN groups g ON b.group_id = g.id
                 WHERE g.name = ?
@@ -357,29 +368,40 @@ class BillManagementWindow(QDialog):
             self.bills_table.setRowCount(len(bills))
 
             for row, bill in enumerate(bills):
-                for col, value in enumerate(bill[:-1]):  # Exclude the last column (bill ID)
+                for col, value in enumerate(bill[:-1]):
                     self.bills_table.setItem(row, col, QTableWidgetItem(str(value)))
 
                 # Add Delete button in the last column
                 delete_button = QPushButton("Delete")
-                delete_button.clicked.connect(lambda checked, bill_id=bill[-1]: self.delete_bill_from_table(bill_id))
-                self.bills_table.setCellWidget(row, 4, delete_button)
+                delete_button.clicked.connect(lambda checked, bill_id=bill[-1]: self.remove_bill(title()))
+                self.bills_table.setCellWidget(row, 5, delete_button)
+
 
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
 
-    def delete_bill_from_table(self, bill_id):
-        """Delete the bill from the table."""
-        confirm = QMessageBox.question(self, "Confirm", "Are you sure you want to delete this bill?",
+
+    def remove_bill(self):
+        selected_row = self.bills_table.currentRow()
+
+        if selected_row < 0:
+            QMessageBox.warning(self, "Error", "Please select a bill to delete.")
+            return
+
+        title = self.bills_table.item(selected_row, 0).text()
+
+        try:
+            confirm = QMessageBox.question(self, "Confirm", "Are you sure you want to delete this bill?",
                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
-        if confirm == QMessageBox.Yes:
-            try:
-                self.bill_manager.delete_bill(bill_id)  # Delete bill by ID
-                QMessageBox.information(self, "Success", "Bill deleted.")
+            if confirm == QMessageBox.Yes:
+                self.bill_manager.remove_bill(self.group_name, title)
+
+                QMessageBox.information(self, "Success", f"Bill '{title}' has been deleted.")
                 self.update_bill_table()
-            except Exception as e:
-                QMessageBox.critical(self, "Error", str(e))
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
 
 
 if __name__ == "__main__":

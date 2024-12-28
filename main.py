@@ -29,6 +29,7 @@ def main():
     bill_parser.add_argument("--title", help="Bill title", required=False)
     bill_parser.add_argument("--amount", type=float, help="Bill amount", required=False)
     bill_parser.add_argument("--date", help="Bill date (YYYY-MM-DD)", required=False)
+    bill_parser.add_argument("--split", choices=["equal", "percentage"], required=False, help="Split method for the bill")
 
     args = parser.parse_args()
 
@@ -65,10 +66,10 @@ def main():
     elif args.command == "bill":
         bill_manager = BillManager()
         if args.action == "add":
-            if not args.group or not args.title or args.amount is None or not args.date:
-                print("Error: Group name, title, amount, and date are required.")
+            if not args.group or not args.title or args.amount is None or not args.date or not args.split:
+                print("Error: Group name, title, amount, date, and split method are required.")
             else:
-                bill_manager.add_bill(args.group, args.title, args.amount, args.date)
+                bill_manager.add_bill(args.group, args.title, args.amount, args.date, args.split)
                 print(f"Bill '{args.title}' added to group '{args.group}'.")
         elif args.action == "remove":
             if not args.group or not args.title:

@@ -14,7 +14,7 @@ class ParticipantManager:
         """
         self.db.execute_query(query, (first_name, last_name, group_id))
 
-    def remove_participant(self, group_name, first_name, last_name):
+    def delete_participant(self, group_name, first_name, last_name):
         group_id = self.get_group_id(group_name)
         if not group_id:
             raise ValueError(f"Group '{group_name}' does not exist.")
