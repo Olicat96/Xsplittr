@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="splitwise" uuid="4b3a3fc7-5155-4b91-97cf-44b5235f4eca">
+    <data-source source="LOCAL" name="splitwise" uuid="aa19a75a-8696-46a7-8570-f7bb0f514e7a">
       <driver-ref>sqlite.xerial</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
-      <jdbc-url>jdbc:sqlite:C:\Users\nikeu\PycharmProjects\Xsplittr\splitwise.db</jdbc-url>
+      <jdbc-url>jdbc:sqlite:C:\Users\mihr4\PycharmProjects\Xsplittr\splitwise.db</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
   </component>

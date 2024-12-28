@@ -13,8 +13,7 @@ class Database:
             self.conn.execute("""
                 CREATE TABLE IF NOT EXISTS groups (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT UNIQUE NOT NULL,
-                    split_method TEXT NOT NULL
+                    name TEXT UNIQUE NOT NULL
                 )
             """)
             self.conn.execute("""
@@ -32,6 +31,7 @@ class Database:
                     title TEXT NOT NULL,
                     amount REAL NOT NULL,
                     date TEXT NOT NULL,
+                    split_method TEXT NOT NULL,
                     group_id INTEGER NOT NULL,
                     FOREIGN KEY (group_id) REFERENCES groups(id)
                 )
