@@ -280,6 +280,7 @@ class BillManagementWindow(QDialog):
         self.update_bill_table()
 
     def setup_bill_section(self):
+        # Existing bill input layout
         bill_label = QLabel("Add a New Bill")
         self.layout.addWidget(bill_label)
 
@@ -293,6 +294,7 @@ class BillManagementWindow(QDialog):
 
         self.split_method_dropdown = QComboBox()
         self.split_method_dropdown.addItems(BillManager.SPLIT_METHODS)
+        self.split_method_dropdown.currentTextChanged.connect(self.toggle_percentage_input)
 
         add_bill_btn = QPushButton("Add Bill")
         add_bill_btn.clicked.connect(self.add_bill)
@@ -305,11 +307,12 @@ class BillManagementWindow(QDialog):
 
         self.layout.addLayout(bill_input_layout)
 
-        # Bills Table Section
+        # Bills Table Section (Initialize self.bills_table)
         table_layout = QVBoxLayout()
-        self.bills_table = QTableWidget()
-        self.bills_table.setColumnCount(5)
-        self.bills_table.setHorizontalHeaderLabels(["Title", "Amount", "Date", "Split Method", "Group"])
+        self.bills_table = QTableWidget()  # Define bills_table here
+        self.bills_table.setColumnCount(6)
+        self.bills_table.setHorizontalHeaderLabels(
+            ["Title", "Amount", "Date", "Split Method", "Group", "Split Details"])
         table_layout.addWidget(self.bills_table)
 
         delete_bill_btn = QPushButton("Delete")
@@ -317,6 +320,37 @@ class BillManagementWindow(QDialog):
         table_layout.addWidget(delete_bill_btn)
 
         self.layout.addLayout(table_layout)
+
+        # Dynamic Percentage Input Section (Wrap in QWidget)
+        self.percentage_input_widget = QWidget()
+        self.percentage_input_layout = QVBoxLayout(self.percentage_input_widget)
+
+        self.percentage_inputs = []
+
+        participants = self.bill_manager.db.fetch_all("""
+            SELECT first_name || ' ' || last_name AS participant_name
+            FROM participants
+            WHERE group_id = (SELECT id FROM groups WHERE name = ?)
+        """, (self.group_name,))
+        for participant in participants:
+            label = QLabel(f"{participant[0]}:")
+            input_field = QLineEdit()
+            input_field.setPlaceholderText("Enter percentage")
+            self.percentage_inputs.append((participant[0], input_field))
+            row = QHBoxLayout()
+            row.addWidget(label)
+            row.addWidget(input_field)
+            self.percentage_input_layout.addLayout(row)
+
+        self.layout.addWidget(self.percentage_input_widget)
+        self.percentage_input_widget.setVisible(False)
+
+    def toggle_percentage_input(self, method):
+        """Toggle percentage input fields based on selected split method."""
+        if method.lower() == "percentage":
+            self.percentage_input_widget.setVisible(True)
+        else:
+            self.percentage_input_widget.setVisible(False)
 
     def add_bill(self):
         title = self.bill_title_input.text()
@@ -331,17 +365,30 @@ class BillManagementWindow(QDialog):
         try:
             amount = float(amount)
 
-            self.bill_manager.add_bill(self.group_name, title, amount, date, split_method)
+            if split_method.lower() == "percentage":
+                percentages = []
+                for participant_name, input_field in self.percentage_inputs:
+                    percentage = input_field.text()
+                    if not percentage:
+                        QMessageBox.warning(self, "Error", f"Percentage for {participant_name} is missing.")
+                        return
+                    percentage = float(percentage)
+                    percentages.append((participant_name, percentage))
+
+                # Validate percentages total 100%
+                total_percentage = sum(p[1] for p in percentages)
+                if abs(total_percentage - 100) > 0.01:  # Allow minor floating-point errors
+                    QMessageBox.warning(self, "Error", "Percentages must total 100%.")
+                    return
+
+                self.bill_manager.add_bill(self.group_name, title, amount, date, split_method, percentages)
+            else:
+                self.bill_manager.add_bill(self.group_name, title, amount, date, split_method)
 
             QMessageBox.information(self, "Success", f"Bill '{title}' added.")
 
-            # Clear input fields after adding the bill
-            self.bill_title_input.clear()
-            self.bill_amount_input.clear()
-            self.bill_date_input.clear()
-
             # Update the bill table to reflect the new data
-            self.update_bill_table()
+            self.update_bill_table()  # Ensure this is called
 
         except ValueError:
             QMessageBox.critical(self, "Error", "Amount must be a valid number.")
@@ -350,27 +397,63 @@ class BillManagementWindow(QDialog):
 
     def update_bill_table(self):
         try:
+            # Fetch bills for the selected group
+            print(f"Fetching bills for group: {self.group_name}")
             bills = self.bill_manager.db.fetch_all("""
-                SELECT b.title, b.amount, b.date, b.split_method, g.name AS group_name, b.id
+                SELECT b.id, b.title, b.amount, b.date, b.split_method, g.name
                 FROM bills b
                 JOIN groups g ON b.group_id = g.id
                 WHERE g.name = ?
             """, (self.group_name,))
 
+            print("Fetched bills:", bills)  # Debugging: Check fetched bills
+
+            if not bills:
+                QMessageBox.information(self, "No Bills", "No bills found for this group.")
+                self.bills_table.setRowCount(0)
+                return
+
+            # Set the row count based on the number of bills
             self.bills_table.setRowCount(len(bills))
 
             for row, bill in enumerate(bills):
-                for col, value in enumerate(bill[:-1]):
-                    self.bills_table.setItem(row, col, QTableWidgetItem(str(value)))
+                bill_id, title, amount, date, split_method, group_name = bill
 
-                delete_button = QPushButton("Delete")
-                delete_button.clicked.connect(lambda checked, bill_id=bill[-1]: self.remove_bill(title()))
-                self.bills_table.setCellWidget(row, 5, delete_button)
+                # Add main bill details
+                self.bills_table.setItem(row, 0, QTableWidgetItem(title))
+                self.bills_table.setItem(row, 1, QTableWidgetItem(str(amount)))
+                self.bills_table.setItem(row, 2, QTableWidgetItem(date))
+                self.bills_table.setItem(row, 3, QTableWidgetItem(split_method))
+                self.bills_table.setItem(row, 4, QTableWidgetItem(group_name))
 
+                currency_symbol = 'CHF'
+
+                # Fetch split details for the bill
+                contributions = self.bill_manager.db.fetch_all("""
+                    SELECT p.first_name || ' ' || p.last_name AS participant_name, bp.amount
+                    FROM bill_participants bp
+                    JOIN participants p ON bp.participant_id = p.id
+                    WHERE bp.bill_id = ?
+                """, (bill_id,))
+
+                print(f"Bill ID {bill_id} Contributions:", contributions)  # Debugging: Check fetched contributions
+
+                if split_method.lower() == "equal":
+                    # For equal splits, show a single message
+                    split_details = f"Everyone pays: {currency_symbol} {contributions[0][1]:.2f}" if contributions else "No participants"
+                elif split_method.lower() == "percentage":
+                    # For percentage splits, show detailed breakdown
+                    split_details = ", ".join(
+                        [f"{participant}: {currency_symbol} {amount:.2f}" for participant, amount in contributions]
+                    )
+                else:
+                    split_details = "Custom or unsupported split method"
+
+                # Add the split details to the table
+                self.bills_table.setItem(row, 5, QTableWidgetItem(split_details))
 
         except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
-
+            QMessageBox.critical(self, "Error", f"An error occurred while updating the table: {e}")
 
     def remove_bill(self):
         selected_row = self.bills_table.currentRow()
