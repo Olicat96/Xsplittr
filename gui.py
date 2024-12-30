@@ -267,10 +267,12 @@ class BillManagementWindow(QDialog):
 
         self.layout = QVBoxLayout()
 
-        # Bill Management Section
         self.setup_bill_section()
 
-        # Add "Done" Button
+        finish_trip_btn = QPushButton("Finish Trip")
+        finish_trip_btn.clicked.connect(self.finish_trip)  # Connect to the finish_trip method
+        self.layout.addWidget(finish_trip_btn)
+
         done_button = QPushButton("Done")
         done_button.clicked.connect(self.close)  # Close the window when clicked
         self.layout.addWidget(done_button)
@@ -279,11 +281,58 @@ class BillManagementWindow(QDialog):
 
         self.update_bill_table()
 
+    def finish_trip(self):
+        """Calculate balances and show payment summary."""
+        try:
+            # Fetch contributions and calculate owed amounts
+            contributions = self.bill_manager.db.fetch_all("""
+                SELECT p.first_name || ' ' || p.last_name AS participant_name,
+                       SUM(CASE WHEN bp.amount > 0 THEN bp.amount ELSE 0 END) AS paid,
+                       SUM(bp.amount) AS owed
+                FROM bill_participants bp
+                JOIN participants p ON bp.participant_id = p.id
+                JOIN bills b ON bp.bill_id = b.id
+                WHERE b.group_id = (SELECT id FROM groups WHERE name = ?)
+                GROUP BY p.id
+            """, (self.group_name,))
+
+            # Debugging: Print contributions
+            print("Contributions:", contributions)
+
+            # Calculate net balances
+            balances = {name: paid - owed for name, paid, owed in contributions}
+
+            # Determine who owes whom
+            owes_list = []
+            creditors = {name: balance for name, balance in balances.items() if balance > 0}  # Positive balances
+            debtors = {name: -balance for name, balance in balances.items() if balance < 0}  # Negative balances
+
+            for debtor, debt in debtors.items():
+                for creditor, credit in list(creditors.items()):
+                    if credit == 0:
+                        continue
+                    payment = min(debt, credit)
+                    owes_list.append(f"{debtor} owes {creditor} CHF {payment:.2f}")
+                    creditors[creditor] -= payment
+                    debtors[debtor] -= payment
+                    if creditors[creditor] == 0:
+                        del creditors[creditor]
+                    if debtors[debtor] == 0:
+                        break
+
+            # Show the summary in a dialog
+            payment_summary = "\n".join(owes_list) if owes_list else "No payments required!"
+            QMessageBox.information(self, "Payment Summary", payment_summary)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred while calculating balances: {e}")
+
     def setup_bill_section(self):
-        # Existing bill input layout
+        # Label for the section
         bill_label = QLabel("Add a New Bill")
         self.layout.addWidget(bill_label)
 
+        # Input layout for title, amount, date, and split method
         bill_input_layout = QHBoxLayout()
         self.bill_title_input = QLineEdit()
         self.bill_title_input.setPlaceholderText("Bill Title")
@@ -305,23 +354,10 @@ class BillManagementWindow(QDialog):
         bill_input_layout.addWidget(self.split_method_dropdown)
         bill_input_layout.addWidget(add_bill_btn)
 
+        # Add bill input layout to the main layout
         self.layout.addLayout(bill_input_layout)
 
-        # Bills Table Section (Initialize self.bills_table)
-        table_layout = QVBoxLayout()
-        self.bills_table = QTableWidget()  # Define bills_table here
-        self.bills_table.setColumnCount(6)
-        self.bills_table.setHorizontalHeaderLabels(
-            ["Title", "Amount", "Date", "Split Method", "Group", "Split Details"])
-        table_layout.addWidget(self.bills_table)
-
-        delete_bill_btn = QPushButton("Delete")
-        delete_bill_btn.clicked.connect(self.remove_bill)
-        table_layout.addWidget(delete_bill_btn)
-
-        self.layout.addLayout(table_layout)
-
-        # Dynamic Percentage Input Section (Wrap in QWidget)
+        # Dynamic Percentage Input Section (Added below the bill input fields)
         self.percentage_input_widget = QWidget()
         self.percentage_input_layout = QVBoxLayout(self.percentage_input_widget)
 
@@ -342,8 +378,24 @@ class BillManagementWindow(QDialog):
             row.addWidget(input_field)
             self.percentage_input_layout.addLayout(row)
 
+        # Add percentage input widget directly below the bill input layout
         self.layout.addWidget(self.percentage_input_widget)
-        self.percentage_input_widget.setVisible(False)
+        self.percentage_input_widget.setVisible(False)  # Hidden by default
+
+        # Table layout for displaying bills
+        table_layout = QVBoxLayout()
+        self.bills_table = QTableWidget()
+        self.bills_table.setColumnCount(6)
+        self.bills_table.setHorizontalHeaderLabels(
+            ["Title", "Amount", "Date", "Split Method", "Group", "Split Details"])
+        table_layout.addWidget(self.bills_table)
+
+        delete_bill_btn = QPushButton("Delete")
+        delete_bill_btn.clicked.connect(self.remove_bill)
+        table_layout.addWidget(delete_bill_btn)
+
+        # Add the table layout to the main layout
+        self.layout.addLayout(table_layout)
 
     def toggle_percentage_input(self, method):
         """Toggle percentage input fields based on selected split method."""
@@ -375,7 +427,6 @@ class BillManagementWindow(QDialog):
                     percentage = float(percentage)
                     percentages.append((participant_name, percentage))
 
-                # Validate percentages total 100%
                 total_percentage = sum(p[1] for p in percentages)
                 if abs(total_percentage - 100) > 0.01:  # Allow minor floating-point errors
                     QMessageBox.warning(self, "Error", "Percentages must total 100%.")
@@ -387,7 +438,6 @@ class BillManagementWindow(QDialog):
 
             QMessageBox.information(self, "Success", f"Bill '{title}' added.")
 
-            # Update the bill table to reflect the new data
             self.update_bill_table()  # Ensure this is called
 
         except ValueError:
@@ -397,7 +447,6 @@ class BillManagementWindow(QDialog):
 
     def update_bill_table(self):
         try:
-            # Fetch bills for the selected group
             print(f"Fetching bills for group: {self.group_name}")
             bills = self.bill_manager.db.fetch_all("""
                 SELECT b.id, b.title, b.amount, b.date, b.split_method, g.name
@@ -413,13 +462,11 @@ class BillManagementWindow(QDialog):
                 self.bills_table.setRowCount(0)
                 return
 
-            # Set the row count based on the number of bills
             self.bills_table.setRowCount(len(bills))
 
             for row, bill in enumerate(bills):
                 bill_id, title, amount, date, split_method, group_name = bill
 
-                # Add main bill details
                 self.bills_table.setItem(row, 0, QTableWidgetItem(title))
                 self.bills_table.setItem(row, 1, QTableWidgetItem(str(amount)))
                 self.bills_table.setItem(row, 2, QTableWidgetItem(date))
@@ -428,7 +475,6 @@ class BillManagementWindow(QDialog):
 
                 currency_symbol = 'CHF'
 
-                # Fetch split details for the bill
                 contributions = self.bill_manager.db.fetch_all("""
                     SELECT p.first_name || ' ' || p.last_name AS participant_name, bp.amount
                     FROM bill_participants bp
@@ -439,17 +485,14 @@ class BillManagementWindow(QDialog):
                 print(f"Bill ID {bill_id} Contributions:", contributions)  # Debugging: Check fetched contributions
 
                 if split_method.lower() == "equal":
-                    # For equal splits, show a single message
-                    split_details = f"Everyone pays: {currency_symbol} {contributions[0][1]:.2f}" if contributions else "No participants"
+                    split_details = f"Each person paid: {currency_symbol} {contributions[0][1]:.2f}" if contributions else "No participants"
                 elif split_method.lower() == "percentage":
-                    # For percentage splits, show detailed breakdown
                     split_details = ", ".join(
-                        [f"{participant}: {currency_symbol} {amount:.2f}" for participant, amount in contributions]
+                        [f"{participant} paid: {currency_symbol} {amount:.2f}" for participant, amount in contributions]
                     )
                 else:
                     split_details = "Custom or unsupported split method"
 
-                # Add the split details to the table
                 self.bills_table.setItem(row, 5, QTableWidgetItem(split_details))
 
         except Exception as e:
