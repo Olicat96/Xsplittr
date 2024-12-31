@@ -8,12 +8,5 @@
       <jdbc-url>jdbc:sqlite:C:\Users\mihr4\PycharmProjects\Xsplittr\splitwise.db</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
-    <data-source source="LOCAL" name="splitwise [2]" uuid="86b1d89e-ff5a-472a-9922-4b02864478c3">
-      <driver-ref>sqlite.xerial</driver-ref>
-      <synchronize>true</synchronize>
-      <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
-      <jdbc-url>jdbc:sqlite:C:\Users\dejan\PycharmProjects\Xsplittr\splitwise.db</jdbc-url>
-      <working-dir>$ProjectFileDir$</working-dir>
-    </data-source>
   </component>
 </project>
