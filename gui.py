@@ -1,4 +1,5 @@
 import sys
+import sqlite3
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QListWidget, QWidget,
     QMessageBox, QDialog, QTableWidget, QTableWidgetItem, QListWidgetItem, QComboBox
@@ -154,12 +155,15 @@ class GroupManagementWindow(QDialog):
         self.participant_first_name_input.setPlaceholderText("Enter Participant First Name")
         self.participant_last_name_input = QLineEdit()
         self.participant_last_name_input.setPlaceholderText("Enter Participant Last Name")
+        self.participant_nickname_input = QLineEdit()
+        self.participant_nickname_input.setPlaceholderText("Enter Unique Nickname")
 
         add_participant_btn = QPushButton("Add Participant")
         add_participant_btn.clicked.connect(self.add_participant)
 
         participant_input_layout.addWidget(self.participant_first_name_input)
         participant_input_layout.addWidget(self.participant_last_name_input)
+        participant_input_layout.addWidget(self.participant_nickname_input)
         participant_input_layout.addWidget(add_participant_btn)
 
         self.layout.addLayout(participant_input_layout)
@@ -187,40 +191,46 @@ class GroupManagementWindow(QDialog):
     def add_participant(self):
         first_name = self.participant_first_name_input.text()
         last_name = self.participant_last_name_input.text()
+        nickname = self.participant_nickname_input.text()
 
-        if not first_name or not last_name:
-            QMessageBox.warning(self, "Error", "Both first name and last name are required.")
+        # Print to debug inputs
+        print(f"Adding participant with: First Name='{first_name}', Last Name='{last_name}', Nickname='{nickname}'")
+
+        if not first_name or not last_name or not nickname:
+            QMessageBox.warning(self, "Error", "First name, last name, and nickname are required.")
             return
 
         try:
-            # Add the participant to the group
-            self.participant_manager.add_participant(self.group_name, first_name, last_name)
-            QMessageBox.information(self, "Success", f"Participant '{first_name} {last_name}' added.")
+            print("Attempting to add participant...")
+            self.participant_manager.add_participant(self.group_name, first_name, last_name, nickname)
+            print("Participant added successfully.")
+            QMessageBox.information(self, "Success",
+                                    f"Participant '{first_name} {last_name}' with nickname '{nickname}' added.")
             self.participant_first_name_input.clear()
             self.participant_last_name_input.clear()
-
-            # Update the participant list after adding
+            self.participant_nickname_input.clear()
             self.update_participant_list()
-
-            # Enable Add Bill button after adding participants
-            self.add_bill_button.setEnabled(True)
-
+        except sqlite3.IntegrityError:
+            print("IntegrityError: Duplicate nickname.")
+            QMessageBox.warning(self, "Duplicate Nickname",
+                                "The nickname you entered already exists. Please use a different nickname.")
         except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
+            print(f"Unexpected error: {e}")
+            QMessageBox.critical(self, "Error", f"An unexpected error occurred: {str(e)}")
 
     def update_participant_list(self):
         """Update the list of participants for the group."""
         try:
             participants = self.participant_manager.db.fetch_all("""
-                SELECT first_name, last_name 
+                SELECT first_name, last_name, nickname 
                 FROM participants 
                 WHERE group_id = (SELECT id FROM groups WHERE name = ?)
             """, (self.group_name,))
 
             self.participant_list_widget.clear()
             for participant in participants:
-                participant_name = f"{participant[0]} {participant[1]}"
-                self.participant_list_widget.addItem(participant_name)
+                participant_display = f"{participant[0]} {participant[1]} ({participant[2]})"  # Include nickname
+                self.participant_list_widget.addItem(participant_display)
 
             if participants:
                 self.add_bill_button.setEnabled(True)
@@ -236,16 +246,20 @@ class GroupManagementWindow(QDialog):
             QMessageBox.warning(self, "Error", "Please select a participant to delete.")
             return
 
-        participant_name = selected_participant.text()
-        first_name, last_name = participant_name.split()
+        # Extract the display text and parse the nickname
+        participant_display = selected_participant.text()
+        _, _, nickname = participant_display.rpartition('(')  # Extract nickname from display
+        nickname = nickname.rstrip(')')  # Remove trailing parenthesis
 
-        confirm = QMessageBox.question(self, "Confirm", f"Are you sure you want to delete the participant '{participant_name}'?",
+        confirm = QMessageBox.question(self, "Confirm",
+                                       f"Are you sure you want to delete the participant with nickname '{nickname}'?",
                                        QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
         if confirm == QMessageBox.Yes:
             try:
-                self.participant_manager.delete_participant(self.group_name, first_name, last_name)
-                QMessageBox.information(self, "Success", f"Participant '{participant_name}' deleted.")
+                # Use the nickname to delete the participant
+                self.participant_manager.delete_participant(self.group_name, nickname)
+                QMessageBox.information(self, "Success", f"Participant with nickname '{nickname}' deleted.")
                 self.update_participant_list()
             except Exception as e:
                 QMessageBox.critical(self, "Error", str(e))

@@ -21,6 +21,7 @@ class Database:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     first_name TEXT NOT NULL,
                     last_name TEXT NOT NULL,
+                    nickname TEXT UNIQUE NOT NULL,
                     group_id INTEGER NOT NULL,
                     FOREIGN KEY (group_id) REFERENCES groups(id)
                 )
@@ -57,4 +58,3 @@ class Database:
     def close_connection(self):
         """Close the database connection."""
         self.conn.close()
-
