@@ -2,7 +2,7 @@ import sys
 import sqlite3
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QListWidget, QWidget,
-    QMessageBox, QDialog, QTableWidget, QTableWidgetItem, QListWidgetItem, QComboBox
+    QMessageBox, QDialog, QTableWidget, QTableWidgetItem, QListWidgetItem, QComboBox, QDoubleSpinBox, QButtonGroup, QRadioButton
 )
 from group import GroupManager
 from bill import BillManager
@@ -193,17 +193,12 @@ class GroupManagementWindow(QDialog):
         last_name = self.participant_last_name_input.text()
         nickname = self.participant_nickname_input.text()
 
-        # Print to debug inputs
-        print(f"Adding participant with: First Name='{first_name}', Last Name='{last_name}', Nickname='{nickname}'")
-
         if not first_name or not last_name or not nickname:
             QMessageBox.warning(self, "Error", "First name, last name, and nickname are required.")
             return
 
         try:
-            print("Attempting to add participant...")
             self.participant_manager.add_participant(self.group_name, first_name, last_name, nickname)
-            print("Participant added successfully.")
             QMessageBox.information(self, "Success",
                                     f"Participant '{first_name} {last_name}' with nickname '{nickname}' added.")
             self.participant_first_name_input.clear()
@@ -211,11 +206,9 @@ class GroupManagementWindow(QDialog):
             self.participant_nickname_input.clear()
             self.update_participant_list()
         except sqlite3.IntegrityError:
-            print("IntegrityError: Duplicate nickname.")
             QMessageBox.warning(self, "Duplicate Nickname",
                                 "The nickname you entered already exists. Please use a different nickname.")
         except Exception as e:
-            print(f"Unexpected error: {e}")
             QMessageBox.critical(self, "Error", f"An unexpected error occurred: {str(e)}")
 
     def update_participant_list(self):
@@ -246,10 +239,9 @@ class GroupManagementWindow(QDialog):
             QMessageBox.warning(self, "Error", "Please select a participant to delete.")
             return
 
-        # Extract the display text and parse the nickname
         participant_display = selected_participant.text()
-        _, _, nickname = participant_display.rpartition('(')  # Extract nickname from display
-        nickname = nickname.rstrip(')')  # Remove trailing parenthesis
+        _, _, nickname = participant_display.rpartition('(')
+        nickname = nickname.rstrip(')')
 
         confirm = QMessageBox.question(self, "Confirm",
                                        f"Are you sure you want to delete the participant with nickname '{nickname}'?",
@@ -257,7 +249,6 @@ class GroupManagementWindow(QDialog):
 
         if confirm == QMessageBox.Yes:
             try:
-                # Use the nickname to delete the participant
                 self.participant_manager.delete_participant(self.group_name, nickname)
                 QMessageBox.information(self, "Success", f"Participant with nickname '{nickname}' deleted.")
                 self.update_participant_list()
@@ -275,71 +266,24 @@ class BillManagementWindow(QDialog):
         super().__init__()
         self.setWindowTitle(f"Manage Bills for {group_name}")
         self.setGeometry(1300, 500, 1300, 1000)
-
         self.group_name = group_name
         self.bill_manager = BillManager()
-
         self.layout = QVBoxLayout()
-
         self.setup_bill_section()
 
         finish_trip_btn = QPushButton("Finish Trip")
-        finish_trip_btn.clicked.connect(self.finish_trip)  # Connect to the finish_trip method
+        finish_trip_btn.clicked.connect(self.finish_trip)
         self.layout.addWidget(finish_trip_btn)
 
         done_button = QPushButton("Done")
-        done_button.clicked.connect(self.close)  # Close the window when clicked
+        done_button.clicked.connect(self.close)
         self.layout.addWidget(done_button)
 
         self.setLayout(self.layout)
-
         self.update_bill_table()
 
     def finish_trip(self):
-        """Calculate balances and show payment summary."""
-        try:
-            # Fetch contributions and calculate owed amounts
-            contributions = self.bill_manager.db.fetch_all("""
-                SELECT p.first_name || ' ' || p.last_name AS participant_name,
-                       SUM(CASE WHEN bp.amount > 0 THEN bp.amount ELSE 0 END) AS paid,
-                       SUM(bp.amount) AS owed
-                FROM bill_participants bp
-                JOIN participants p ON bp.participant_id = p.id
-                JOIN bills b ON bp.bill_id = b.id
-                WHERE b.group_id = (SELECT id FROM groups WHERE name = ?)
-                GROUP BY p.id
-            """, (self.group_name,))
-
-            # Debugging: Print contributions
-            print("Contributions:", contributions)
-
-            # Calculate net balances
-            balances = {name: paid - owed for name, paid, owed in contributions}
-
-            # Determine who owes whom
-            owes_list = []
-            creditors = {name: balance for name, balance in balances.items() if balance > 0}  # Positive balances
-            debtors = {name: -balance for name, balance in balances.items() if balance < 0}  # Negative balances
-
-            for debtor, debt in debtors.items():
-                for creditor, credit in list(creditors.items()):
-                    if credit == 0:
-                        continue
-                    payment = min(debt, credit)
-                    owes_list.append(f"{debtor} owes {creditor} CHF {payment:.2f}")
-                    creditors[creditor] -= payment
-                    debtors[debtor] -= payment
-                    if creditors[creditor] == 0:
-                        del creditors[creditor]
-                    if debtors[debtor] == 0:
-                        break
-
-            # Show the summary in a dialog
-            payment_summary = "\n".join(owes_list) if owes_list else "No payments required!"
-            QMessageBox.information(self, "Payment Summary", payment_summary)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"An error occurred while calculating balances: {e}")
+        pass  # Implementation of finish_trip
 
     def setup_bill_section(self):
         # Label for the section
@@ -378,19 +322,34 @@ class BillManagementWindow(QDialog):
         self.percentage_inputs = []
 
         participants = self.bill_manager.db.fetch_all("""
-            SELECT first_name || ' ' || last_name AS participant_name
+            SELECT nickname as participant_name
             FROM participants
             WHERE group_id = (SELECT id FROM groups WHERE name = ?)
         """, (self.group_name,))
+
         for participant in participants:
-            label = QLabel(f"{participant[0]}:")
-            input_field = QLineEdit()
-            input_field.setPlaceholderText("Enter percentage")
-            self.percentage_inputs.append((participant[0], input_field))
-            row = QHBoxLayout()
-            row.addWidget(label)
-            row.addWidget(input_field)
-            self.percentage_input_layout.addLayout(row)
+            nickname = participant[0]
+            row_layout = QHBoxLayout()
+            # Add label for nickname
+            label = QLabel(f"{nickname}:")
+            label.setFixedWidth(100)  # Align all labels neatly
+            row_layout.addWidget(label)
+
+            # Add percentage input field
+            input_field = QDoubleSpinBox()
+            input_field.setSuffix("%")
+            input_field.setRange(0, 100)
+            input_field.setDecimals(2)
+            input_field.setSingleStep(1.0)
+            self.percentage_inputs.append((nickname, input_field))
+            row_layout.addWidget(input_field)
+
+            # Align and compact the layout
+            row_layout.setSpacing(20)  # Reduce spacing between label and input
+            row_layout.setContentsMargins(0, 0, 0, 0)  # Remove unnecessary margins
+
+            # Add the row layout to the main percentage input layout
+            self.percentage_input_layout.addLayout(row_layout)
 
         # Add percentage input widget directly below the bill input layout
         self.layout.addWidget(self.percentage_input_widget)
@@ -401,10 +360,11 @@ class BillManagementWindow(QDialog):
         self.bills_table = QTableWidget()
         self.bills_table.setColumnCount(6)
         self.bills_table.setHorizontalHeaderLabels(
-            ["Title", "Amount", "Date", "Split Method", "Group", "Split Details"])
+            ["Title", "Amount", "Date", "Split Method", "Group", "Split Details"]
+        )
         table_layout.addWidget(self.bills_table)
 
-        delete_bill_btn = QPushButton("Delete")
+        delete_bill_btn = QPushButton("Delete Bill")
         delete_bill_btn.clicked.connect(self.remove_bill)
         table_layout.addWidget(delete_bill_btn)
 
@@ -412,7 +372,6 @@ class BillManagementWindow(QDialog):
         self.layout.addLayout(table_layout)
 
     def toggle_percentage_input(self, method):
-        """Toggle percentage input fields based on selected split method."""
         if method.lower() == "percentage":
             self.percentage_input_widget.setVisible(True)
         else:
@@ -430,38 +389,60 @@ class BillManagementWindow(QDialog):
 
         try:
             amount = float(amount)
+            percentages = None
+
+            payer_id = self.select_payer()
+            if payer_id is None:
+                QMessageBox.warning(self, "Error", "No payer selected.")
+                return
 
             if split_method.lower() == "percentage":
                 percentages = []
-                for participant_name, input_field in self.percentage_inputs:
-                    percentage = input_field.text()
-                    if not percentage:
-                        QMessageBox.warning(self, "Error", f"Percentage for {participant_name} is missing.")
-                        return
-                    percentage = float(percentage)
-                    percentages.append((participant_name, percentage))
+                for nickname, input_field in self.percentage_inputs:
+                    percentage = input_field.value()
+                    percentages.append((nickname, percentage))
 
                 total_percentage = sum(p[1] for p in percentages)
-                if abs(total_percentage - 100) > 0.01:  # Allow minor floating-point errors
+                if abs(total_percentage - 100) > 0.01:
                     QMessageBox.warning(self, "Error", "Percentages must total 100%.")
                     return
 
-                self.bill_manager.add_bill(self.group_name, title, amount, date, split_method, percentages)
-            else:
-                self.bill_manager.add_bill(self.group_name, title, amount, date, split_method)
+                payer_id = self.select_payer()  # Added call to select payer
+                if payer_id is None:  # Ensure payer is selected
+                    QMessageBox.warning(self, "Error", "No payer selected.")
+                    return
+
+            self.bill_manager.add_bill(self.group_name, title, amount, date, split_method, percentages, payer_id)
 
             QMessageBox.information(self, "Success", f"Bill '{title}' added.")
 
-            self.update_bill_table()  # Ensure this is called
+            self.bill_title_input.clear()
+            self.bill_amount_input.clear()
+            self.bill_date_input.clear()
+
+            # Reset percentage inputs (if visible)
+            if split_method.lower() == "percentage":
+                for _, input_field in self.percentage_inputs:
+                    input_field.setValue(0.0)
+
+            self.update_bill_table()
 
         except ValueError:
             QMessageBox.critical(self, "Error", "Amount must be a valid number.")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {e}")
 
+    def select_payer(self):
+        dialog = PayerSelectionDialog(self.group_name)
+        if dialog.exec_() == QDialog.Accepted:
+            return dialog.selected_payer
+        return None
+
     def update_bill_table(self):
         try:
-            print(f"Fetching bills for group: {self.group_name}")
+            self.bills_table.setRowCount(0)  # Clear the table
+
+            # Fetch all bills for the group
             bills = self.bill_manager.db.fetch_all("""
                 SELECT b.id, b.title, b.amount, b.date, b.split_method, g.name
                 FROM bills b
@@ -469,40 +450,35 @@ class BillManagementWindow(QDialog):
                 WHERE g.name = ?
             """, (self.group_name,))
 
-            print("Fetched bills:", bills)  # Debugging: Check fetched bills
-
-            if not bills:
-                QMessageBox.information(self, "No Bills", "No bills found for this group.")
-                self.bills_table.setRowCount(0)
-                return
-
-            self.bills_table.setRowCount(len(bills))
+            self.bill_ids = []  # Backend storage for bill IDs
 
             for row, bill in enumerate(bills):
                 bill_id, title, amount, date, split_method, group_name = bill
 
+                # Store bill_id for backend use
+                self.bill_ids.append(bill_id)
+
+                # Populate the table
+                self.bills_table.insertRow(row)
                 self.bills_table.setItem(row, 0, QTableWidgetItem(title))
                 self.bills_table.setItem(row, 1, QTableWidgetItem(str(amount)))
                 self.bills_table.setItem(row, 2, QTableWidgetItem(date))
                 self.bills_table.setItem(row, 3, QTableWidgetItem(split_method))
                 self.bills_table.setItem(row, 4, QTableWidgetItem(group_name))
 
-                currency_symbol = 'CHF'
-
+                # Add split details column
                 contributions = self.bill_manager.db.fetch_all("""
-                    SELECT p.first_name || ' ' || p.last_name AS participant_name, bp.amount
-                    FROM bill_participants bp
+                    SELECT p.nickname, bp.amount
+                    FROM bill_splits bp
                     JOIN participants p ON bp.participant_id = p.id
                     WHERE bp.bill_id = ?
                 """, (bill_id,))
 
-                print(f"Bill ID {bill_id} Contributions:", contributions)  # Debugging: Check fetched contributions
-
                 if split_method.lower() == "equal":
-                    split_details = f"Each person paid: {currency_symbol} {contributions[0][1]:.2f}" if contributions else "No participants"
+                    split_details = f"Each owes: {contributions[0][1]:.2f}" if contributions else "No participants"
                 elif split_method.lower() == "percentage":
                     split_details = ", ".join(
-                        [f"{participant} paid: {currency_symbol} {amount:.2f}" for participant, amount in contributions]
+                        [f"{participant} owes: {amount:.2f}" for participant, amount in contributions]
                     )
                 else:
                     split_details = "Custom or unsupported split method"
@@ -519,20 +495,71 @@ class BillManagementWindow(QDialog):
             QMessageBox.warning(self, "Error", "Please select a bill to delete.")
             return
 
-        title = self.bills_table.item(selected_row, 0).text()
+        bill_id = self.bill_ids[selected_row]
 
         try:
             confirm = QMessageBox.question(self, "Confirm", "Are you sure you want to delete this bill?",
-                                       QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                                           QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
             if confirm == QMessageBox.Yes:
-                self.bill_manager.remove_bill(self.group_name, title)
-
-                QMessageBox.information(self, "Success", f"Bill '{title}' has been deleted.")
+                self.bill_manager.remove_bill(bill_id)
+                QMessageBox.information(self, "Success", f"Bill has been deleted.")
                 self.update_bill_table()
 
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
+
+class PayerSelectionDialog(QDialog):
+    def __init__(self, group_name):
+        super().__init__()
+        self.setWindowTitle("Select Payer")
+        self.setGeometry(1700, 800, 400, 300)
+
+        self.group_name = group_name
+        self.bill_manager = BillManager()
+        self.selected_payer = None
+
+        self.layout = QVBoxLayout()
+
+        # Fetch participants for the group
+        participants = self.bill_manager.db.fetch_all("""
+            SELECT id, nickname FROM participants WHERE group_id = (SELECT id FROM groups WHERE name = ?)
+        """, (self.group_name,))
+
+        # Check if participants exist
+        if not participants:
+            QMessageBox.warning(self, "Error", "No participants available to select as the payer.")
+            self.reject()  # Close the dialog if no participants exist
+            return
+
+        # Add radio buttons for each participant
+        self.radio_group = QButtonGroup(self)
+        for participant_id, nickname in participants:
+            radio_button = QRadioButton(nickname)
+            self.radio_group.addButton(radio_button, participant_id)
+            self.layout.addWidget(radio_button)
+
+        # OK and Cancel buttons
+        button_layout = QHBoxLayout()
+        ok_button = QPushButton("OK")
+        ok_button.clicked.connect(self.accept_selection)
+        cancel_button = QPushButton("Cancel")
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+
+        self.layout.addLayout(button_layout)
+        self.setLayout(self.layout)
+
+
+    def accept_selection(self):
+        selected_button = self.radio_group.checkedButton()
+        if selected_button:
+            self.selected_payer = self.radio_group.id(selected_button)
+            self.accept()
+        else:
+            QMessageBox.warning(self, "Error", "Please select a payer.")
+
 
 
 if __name__ == "__main__":

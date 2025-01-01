@@ -33,8 +33,19 @@ class Database:
                     amount REAL NOT NULL,
                     date TEXT NOT NULL,
                     split_method TEXT NOT NULL,
+                    paid_by INTEGER NOT NULL,
                     group_id INTEGER NOT NULL,
                     FOREIGN KEY (group_id) REFERENCES groups(id)
+                )
+            """)
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS bill_splits (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    bill_id INTEGER NOT NULL,
+                    participant_id INTEGER NOT NULL,
+                    amount REAL NOT NULL,
+                    FOREIGN KEY (bill_id) REFERENCES bills(id),
+                    FOREIGN KEY (participant_id) REFERENCES participants(id)
                 )
             """)
 
