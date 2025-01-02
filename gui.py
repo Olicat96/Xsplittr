@@ -395,12 +395,14 @@ class BillManagementWindow(QDialog):
 
         try:
             amount = float(amount)
-            percentages = None
 
+            # Select payer once
             payer_id = self.select_payer()
             if payer_id is None:
                 QMessageBox.warning(self, "Error", "No payer selected.")
                 return
+
+            percentages = None
 
             if split_method.lower() == "percentage":
                 percentages = []
@@ -413,11 +415,6 @@ class BillManagementWindow(QDialog):
                     QMessageBox.warning(self, "Error", "Percentages must total 100%.")
                     return
 
-                payer_id = self.select_payer()  # Added call to select payer
-                if payer_id is None:  # Ensure payer is selected
-                    QMessageBox.warning(self, "Error", "No payer selected.")
-                    return
-
             self.bill_manager.add_bill(self.group_name, title, amount, date, split_method, percentages, payer_id)
 
             QMessageBox.information(self, "Success", f"Bill '{title}' added.")
@@ -426,7 +423,6 @@ class BillManagementWindow(QDialog):
             self.bill_amount_input.clear()
             self.bill_date_input.clear()
 
-            # Reset percentage inputs (if visible)
             if split_method.lower() == "percentage":
                 for _, input_field in self.percentage_inputs:
                     input_field.setValue(0.0)
@@ -481,10 +477,14 @@ class BillManagementWindow(QDialog):
                 """, (bill_id,))
 
                 if split_method.lower() == "equal":
-                    split_details = f"Each owes: {contributions[0][1]:.2f}" if contributions else "No participants"
+                    split_details = (
+                        ", ".join([f"{participant} Owes: {amount:.2f}" for participant, amount in contributions])
+                        if contributions
+                        else "No participants"
+                    )
                 elif split_method.lower() == "percentage":
                     split_details = ", ".join(
-                        [f"{participant} owes: {amount:.2f}" for participant, amount in contributions]
+                        [f"{participant} Owes: {amount:.2f}" for participant, amount in contributions]
                     )
                 else:
                     split_details = "Custom or unsupported split method"
