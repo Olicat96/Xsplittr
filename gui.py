@@ -417,7 +417,7 @@ class BillManagementWindow(QDialog):
 
             self.bill_manager.add_bill(self.group_name, title, amount, date, split_method, percentages, payer_id)
 
-            QMessageBox.information(self, "Success", f"Bill '{title}' added.")
+            QMessageBox.information(self, "Success", f"Bill '{title}' of {amount:.2f} CHF added.")
 
             self.bill_title_input.clear()
             self.bill_amount_input.clear()
@@ -463,7 +463,7 @@ class BillManagementWindow(QDialog):
                 # Populate the table
                 self.bills_table.insertRow(row)
                 self.bills_table.setItem(row, 0, QTableWidgetItem(title))
-                self.bills_table.setItem(row, 1, QTableWidgetItem(str(amount)))
+                self.bills_table.setItem(row, 1, QTableWidgetItem(f"{amount:.2f} CHF"))
                 self.bills_table.setItem(row, 2, QTableWidgetItem(date))
                 self.bills_table.setItem(row, 3, QTableWidgetItem(split_method))
                 self.bills_table.setItem(row, 4, QTableWidgetItem(group_name))
@@ -478,13 +478,13 @@ class BillManagementWindow(QDialog):
 
                 if split_method.lower() == "equal":
                     split_details = (
-                        ", ".join([f"{participant} Owes: {amount:.2f}" for participant, amount in contributions])
+                        ", ".join([f"{participant} Owes: {amount:.2f} CHF" for participant, amount in contributions])
                         if contributions
                         else "No participants"
                     )
                 elif split_method.lower() == "percentage":
                     split_details = ", ".join(
-                        [f"{participant} Owes: {amount:.2f}" for participant, amount in contributions]
+                        [f"{participant} Owes: {amount:.2f} CHF" for participant, amount in contributions]
                     )
                 else:
                     split_details = "Custom or unsupported split method"
