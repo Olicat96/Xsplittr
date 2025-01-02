@@ -152,7 +152,7 @@ class BillManager:
                     debt_map[(payer, participant)] = amount
 
         # Generate settlements
-        settlements = [f"{participant} owes {payer} {amount:.2f} CHF" for (payer, participant), amount in debt_map.items()]
+        settlements = [f"{participant} owes {payer} CHF {amount:.2f}" for (payer, participant), amount in debt_map.items()]
 
         return settlements
 

@@ -1,5 +1,6 @@
 import sys
-import sqlite3
+import sqlite3, qrcode
+from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QListWidget, QWidget,
     QMessageBox, QDialog, QTableWidget, QTableWidgetItem, QListWidgetItem, QComboBox, QDoubleSpinBox, QButtonGroup, QRadioButton
@@ -265,7 +266,7 @@ class BillManagementWindow(QDialog):
     def __init__(self, group_name):
         super().__init__()
         self.setWindowTitle(f"Manage Bills for {group_name}")
-        self.setGeometry(1300, 500, 1300, 1000)
+        self.setGeometry(1250, 500, 1300, 1000)
         self.group_name = group_name
         self.bill_manager = BillManager()
         self.layout = QVBoxLayout()
@@ -417,7 +418,7 @@ class BillManagementWindow(QDialog):
 
             self.bill_manager.add_bill(self.group_name, title, amount, date, split_method, percentages, payer_id)
 
-            QMessageBox.information(self, "Success", f"Bill '{title}' of {amount:.2f} CHF added.")
+            QMessageBox.information(self, "Success", f"Bill '{title}' of CHF {amount:.2f} added.")
 
             self.bill_title_input.clear()
             self.bill_amount_input.clear()
@@ -463,7 +464,7 @@ class BillManagementWindow(QDialog):
                 # Populate the table
                 self.bills_table.insertRow(row)
                 self.bills_table.setItem(row, 0, QTableWidgetItem(title))
-                self.bills_table.setItem(row, 1, QTableWidgetItem(f"{amount:.2f} CHF"))
+                self.bills_table.setItem(row, 1, QTableWidgetItem(f"CHF {amount:.2f}"))
                 self.bills_table.setItem(row, 2, QTableWidgetItem(date))
                 self.bills_table.setItem(row, 3, QTableWidgetItem(split_method))
                 self.bills_table.setItem(row, 4, QTableWidgetItem(group_name))
@@ -478,13 +479,13 @@ class BillManagementWindow(QDialog):
 
                 if split_method.lower() == "equal":
                     split_details = (
-                        ", ".join([f"{participant} Owes: {amount:.2f} CHF" for participant, amount in contributions])
+                        ", ".join([f"{participant} Owes: CHF {amount:.2f}" for participant, amount in contributions])
                         if contributions
                         else "No participants"
                     )
                 elif split_method.lower() == "percentage":
                     split_details = ", ".join(
-                        [f"{participant} Owes: {amount:.2f} CHF" for participant, amount in contributions]
+                        [f"{participant} Owes: CHF {amount:.2f}" for participant, amount in contributions]
                     )
                 else:
                     split_details = "Custom or unsupported split method"
@@ -570,7 +571,7 @@ class FinishTripWindow(QDialog):
     def __init__(self, group_name, bill_manager):
         super().__init__()
         self.setWindowTitle("Trip Settlements")
-        self.setGeometry(1500, 500, 800, 600)
+        self.setGeometry(1500, 500, 800, 800)
 
         self.group_name = group_name
         self.bill_manager = bill_manager
@@ -586,6 +587,7 @@ class FinishTripWindow(QDialog):
 
         # Settlement Display
         self.settlements_list = QListWidget()
+        self.settlements_list.itemClicked.connect(self.show_qr_code)  # Connect click event to QR code display
         main_layout.addWidget(self.settlements_list)
 
         # Button Layout
@@ -609,6 +611,64 @@ class FinishTripWindow(QDialog):
                 self.settlements_list.addItem("No settlements required. All balances are settled.")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred: {e}")
+
+    def show_qr_code(self, item):
+        """Generate and display a QR code for the selected settlement."""
+        settlement_text = item.text()
+
+        # Extract payer and participant from settlement text
+        try:
+            participant, _, payer_details = settlement_text.partition(" owes ")
+            payer, _, amount = payer_details.partition(" ")
+
+            # Example bank details or payment info
+            payment_info = f"Bank details for {payer}\nAmount: CHF {amount.strip()}"
+
+            # Generate QR code
+            qr = qrcode.QRCode(version=1, box_size=10, border=5)
+            qr.add_data(payment_info)
+            qr.make(fit=True)
+            img = qr.make_image(fill="black", back_color="white")
+
+            # Save QR code as an image
+            qr_code_path = "temp_qr_code.png"
+            img.save(qr_code_path)
+
+            # Create the QR code dialog
+            qr_dialog = QDialog(self)
+            qr_dialog.setWindowTitle(f"Bank Details for {payer}")
+            qr_dialog.setGeometry(1650, 500, 400, 600)  # Adjusted size for extra labels and button
+
+            layout = QVBoxLayout()
+
+            # Add a title label
+            title_label = QLabel(f"Bank Details for {payer}")
+            title_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 3px;")
+            layout.addWidget(title_label)
+
+            # Add an amount label
+            amount_label = QLabel(f"Amount to be paid: {amount.strip()}")
+            amount_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 10px;")
+            layout.addWidget(amount_label)
+
+            # Add the QR code image
+            label = QLabel()
+            pixmap = QPixmap(qr_code_path)
+            label.setPixmap(pixmap)
+            label.setScaledContents(True)
+            layout.addWidget(label)
+
+            # Add the "Close" button
+            close_button = QPushButton("Close")
+            close_button.clicked.connect(qr_dialog.close)
+            layout.addWidget(close_button)
+
+            qr_dialog.setLayout(layout)
+            qr_dialog.exec_()
+
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to generate QR code: {e}")
 
 
 if __name__ == "__main__":
