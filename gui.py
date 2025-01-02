@@ -601,8 +601,7 @@ class FinishTripWindow(QDialog):
 
     def display_settlements(self):
         try:
-            balances = self.bill_manager.calculate_balances(self.group_name)
-            settlements = self.bill_manager.calculate_settlements()
+            settlements = self.bill_manager.calculate_settlements(self.group_name)
             if settlements:
                 for settlement in settlements:
                     self.settlements_list.addItem(settlement)

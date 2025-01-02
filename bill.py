@@ -114,14 +114,21 @@ class BillManager:
                 balances[participant_nickname] -= owed_amount
         return balances
 
-    def calculate_settlements(self):
-        # Fetch all debts from bill_splits
+    def calculate_settlements(self, group_name):
+        group_id = self.get_group_id(group_name)
+        if not group_id:
+            raise ValueError(f"Group '{group_name}' does not exist.")
+
+        # Fetch all debts for the specific group
         debts = self.db.fetch_all("""
             SELECT p2.nickname AS payer, p1.nickname AS participant, bs.amount
             FROM bill_splits bs
             JOIN participants p1 ON p1.id = bs.participant_id
             JOIN participants p2 ON p2.id = (SELECT paid_by FROM bills WHERE id = bs.bill_id)
-        """)
+            WHERE bs.bill_id IN (
+                SELECT id FROM bills WHERE group_id = ?
+            )
+        """, (group_id,))
 
         # Use a dictionary to calculate pairwise debts
         debt_map = {}
@@ -148,3 +155,4 @@ class BillManager:
         settlements = [f"{participant} owes {payer} ${amount:.2f}" for (payer, participant), amount in debt_map.items()]
 
         return settlements
+
