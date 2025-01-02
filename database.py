@@ -43,8 +43,8 @@ class Database:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     bill_id INTEGER NOT NULL,
                     participant_id INTEGER NOT NULL,
-                    amount REAL NOT NULL,
-                    FOREIGN KEY (bill_id) REFERENCES bills(id),
+                    amount REAL NOT NULL CHECK (amount >= 0),
+                    FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE,
                     FOREIGN KEY (participant_id) REFERENCES participants(id)
                 )
             """)

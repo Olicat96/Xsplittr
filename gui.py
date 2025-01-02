@@ -283,7 +283,13 @@ class BillManagementWindow(QDialog):
         self.update_bill_table()
 
     def finish_trip(self):
-        pass  # Implementation of finish_trip
+        try:
+            finish_trip_window = FinishTripWindow(self.group_name, self.bill_manager)
+            finish_trip_window.exec_()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred while finishing the trip: {e}")
+
+
 
     def setup_bill_section(self):
         # Label for the section
@@ -529,7 +535,7 @@ class PayerSelectionDialog(QDialog):
         # Check if participants exist
         if not participants:
             QMessageBox.warning(self, "Error", "No participants available to select as the payer.")
-            self.reject()  # Close the dialog if no participants exist
+            self.reject()
             return
 
         # Add radio buttons for each participant
@@ -560,6 +566,50 @@ class PayerSelectionDialog(QDialog):
         else:
             QMessageBox.warning(self, "Error", "Please select a payer.")
 
+class FinishTripWindow(QDialog):
+    def __init__(self, group_name, bill_manager):
+        super().__init__()
+        self.setWindowTitle("Trip Settlements")
+        self.setGeometry(1500, 500, 800, 600)
+
+        self.group_name = group_name
+        self.bill_manager = bill_manager
+
+        # Main layout and widget
+        main_layout = QVBoxLayout()
+        self.setLayout(main_layout)
+
+        # Title
+        title_label = QLabel(f"Final Settlements for Group: {group_name}")
+        title_label.setStyleSheet("font-size: 30px; font-weight: bold; margin-bottom: 10px;")
+        main_layout.addWidget(title_label)
+
+        # Settlement Display
+        self.settlements_list = QListWidget()
+        main_layout.addWidget(self.settlements_list)
+
+        # Button Layout
+        button_layout = QHBoxLayout()
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(self.close)
+        button_layout.addWidget(close_button)
+
+        main_layout.addLayout(button_layout)
+
+        # Display settlements
+        self.display_settlements()
+
+    def display_settlements(self):
+        try:
+            balances = self.bill_manager.calculate_balances(self.group_name)
+            settlements = self.bill_manager.calculate_settlements()
+            if settlements:
+                for settlement in settlements:
+                    self.settlements_list.addItem(settlement)
+            else:
+                self.settlements_list.addItem("No settlements required. All balances are settled.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"An error occurred: {e}")
 
 
 if __name__ == "__main__":
