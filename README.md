@@ -1,6 +1,6 @@
 # Xsplittr
 
-Xsplittr is a collaborative expense management application designed to simplify group expense tracking and settlements. It allows users to create groups, add participants, log shared expenses, and calculate settlements with ease.
+Xsplittr is a group expense management app that makes tracking and settling shared expenses simple. Users can create groups, add participants, record expenses, and calculate settlements effortlessly.
 
 ---
 
